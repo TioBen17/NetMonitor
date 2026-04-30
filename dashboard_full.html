@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetSentry AI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Courier New', monospace;
+  background: #070b14;
+  color: #c0d0e0;
+  min-height: 100vh;
+}
+
+/* ── NAV ── */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #0c1220;
+  border-bottom: 1px solid rgba(100,160,255,0.12);
+  padding: 0 18px;
+}
+.nav-brand {
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #5ca8f8;
+  padding: 14px 20px 14px 0;
+  border-right: 1px solid rgba(255,255,255,0.07);
+  margin-right: 16px;
+}
+.nav-tab {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #556677;
+  padding: 14px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+.nav-tab:hover { color: #8ab8e8; }
+.nav-tab.active { color: #5ca8f8; border-bottom-color: #5ca8f8; }
+.nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: #445566;
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #2dff8c; animation: blink 2s infinite; }
+.dot.off { background: #ff3355; animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── PAGES ── */
+.page { display: none; padding: 16px 18px; }
+.page.active { display: block; }
+
+/* ── GRID HELPERS ── */
+.g4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+.g3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.g21 { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 12px; }
+
+/* ── CARDS ── */
+.card {
+  background: #0f1825;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+.card.anomaly { border-color: #ff3355 !important; background: #17080e; }
+.card.anomaly::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background: linear-gradient(90deg,#ff3355,#ff6688);
+}
+.card.warn { border-color: #ffaa00 !important; }
+.card-label { font-size: 10px; color: #445566; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.card-value { font-size: 24px; font-weight: bold; color: #e0eaf8; line-height: 1; }
+.card-unit { font-size: 11px; color: #445566; margin-left: 2px; }
+.card-sub { font-size: 11px; margin-top: 5px; }
+.up { color: #ff4466; } .ok { color: #2dff8c; } .warn-c { color: #ffaa00; }
+.badge-a {
+  display: inline-block; background: rgba(255,51,85,0.15); color: #ff3355;
+  border: 1px solid rgba(255,51,85,0.3); border-radius: 3px;
+  font-size: 10px; padding: 1px 7px; margin-top: 3px;
+}
+
+/* ── PANEL ── */
+.panel {
+  background: #0f1825;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.panel-title {
+  font-size: 10px; color: #445566;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+/* ── TRAFFIC BARS ── */
+.t-item { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.t-label { font-size: 11px; color: #445566; min-width: 50px; }
+.t-track { flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
+.t-fill { height:100%; border-radius:3px; transition: width 0.8s ease; }
+.t-val { font-size:11px; color:#778899; min-width:45px; text-align:right; }
+
+/* ── LOG ── */
+.log-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 11px; padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.log-row:last-child { border-bottom: none; }
+.log-time { color: #334455; min-width: 58px; }
+.log-msg { flex:1; color: #778899; }
+.log-tag { font-size:10px; padding:1px 7px; border-radius:3px; min-width:60px; text-align:center; }
+.tag-ok { background:rgba(45,255,140,0.1); color:#2dff8c; border:1px solid rgba(45,255,140,0.2); }
+.tag-a  { background:rgba(255,51,85,0.15); color:#ff3355; border:1px solid rgba(255,51,85,0.3); }
+.tag-w  { background:rgba(255,170,0,0.12); color:#ffaa00; border:1px solid rgba(255,170,0,0.25); }
+
+/* ── DEVICES TABLE ── */
+.dev-table { width:100%; border-collapse:collapse; font-size:11px; }
+.dev-table th { color:#445566; font-weight:normal; text-align:left; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:10px; letter-spacing:0.06em; text-transform:uppercase; }
+.dev-table td { padding:7px 8px; border-bottom:1px solid rgba(255,255,255,0.04); color:#8899aa; }
+.dev-table tr:last-child td { border-bottom:none; }
+.status-up { color:#2dff8c; } .status-dn { color:#ff3355; }
+
+/* ── UPTIME BAR ── */
+.uptime-display { display:flex; align-items:baseline; gap:8px; }
+.uptime-big { font-size:28px; font-weight:bold; color:#2dff8c; }
+.uptime-label { font-size:11px; color:#445566; }
+
+/* ── ALERTS CONFIG ── */
+.alert-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.config-section {
+  background: #0a1020;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 16px;
+}
+.config-title {
+  font-size: 10px; color: #5ca8f8;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 14px; padding-bottom: 8px;
+  border-bottom: 1px solid rgba(100,160,255,0.12);
+}
+.field { margin-bottom: 12px; }
+.field label { display:block; font-size:10px; color:#556677; letter-spacing:0.06em; text-transform:uppercase; margin-bottom:5px; }
+.field input, .field select {
+  width: 100%; background: #070b14; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px; padding: 7px 10px; color: #c0d0e0;
+  font-family: 'Courier New', monospace; font-size: 12px;
+  outline: none; transition: border-color 0.2s;
+}
+.field input:focus, .field select:focus { border-color: #5ca8f8; }
+.field input[type="range"] {
+  padding: 0; border: none; background: transparent; cursor: pointer;
+  accent-color: #5ca8f8;
+}
+.range-row { display:flex; align-items:center; gap:10px; }
+.range-val { font-size:13px; font-weight:bold; color:#5ca8f8; min-width:40px; }
+.toggle-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.toggle-label { font-size:11px; color:#778899; }
+.toggle {
+  width:36px; height:20px; background:#1a2535; border-radius:10px;
+  position:relative; cursor:pointer; transition:background 0.2s;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.toggle.on { background:#1a4a8a; border-color:#5ca8f8; }
+.toggle::after {
+  content:''; position:absolute; top:2px; left:2px;
+  width:14px; height:14px; border-radius:50%; background:#445566;
+  transition: all 0.2s;
+}
+.toggle.on::after { left:18px; background:#5ca8f8; }
+
+/* ── BUTTONS ── */
+.btn {
+  font-family: 'Courier New', monospace;
+  font-size: 11px; letter-spacing:0.05em;
+  padding: 8px 16px; border-radius:5px; cursor:pointer;
+  border: 1px solid rgba(100,160,255,0.3);
+  background: rgba(100,160,255,0.08);
+  color: #5ca8f8; transition: all 0.2s;
+}
+.btn:hover { background: rgba(100,160,255,0.15); border-color:#5ca8f8; }
+.btn-danger { border-color:rgba(255,51,85,0.3); background:rgba(255,51,85,0.08); color:#ff3355; }
+.btn-danger:hover { background:rgba(255,51,85,0.15); }
+.btn-success { border-color:rgba(45,255,140,0.3); background:rgba(45,255,140,0.08); color:#2dff8c; }
+.save-row { display:flex; gap:10px; margin-top:16px; }
+.save-msg { font-size:11px; color:#2dff8c; margin-top:4px; display:none; }
+.save-msg.show { display:block; }
+
+/* ── REPORT ── */
+.report-stat { text-align:center; padding:16px; }
+.report-stat-val { font-size:22px; font-weight:bold; color:#5ca8f8; }
+.report-stat-label { font-size:10px; color:#445566; margin-top:4px; letter-spacing:0.06em; text-transform:uppercase; }
+
+/* ── OFFLINE BANNER ── */
+.offline { display:none; background:rgba(255,51,85,0.08); border:1px solid rgba(255,51,85,0.25); border-radius:8px; padding:10px 16px; font-size:11px; color:#ff6688; margin-bottom:12px; }
+.offline.show { display:block; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">TIO'S MONITORING DASHBOARD</div>
+  <div class="nav-tab active" onclick="showPage('dashboard',this)">Dashboard</div>
+  <div class="nav-tab" onclick="showPage('devices',this)">Devices</div>
+  <div class="nav-tab" onclick="showPage('traffic',this)">Traffic</div>
+  <div class="nav-tab" onclick="showPage('alerts',this)">Alerts &amp; Config</div>
+  <div class="nav-tab" onclick="showPage('report',this)">Weekly Report</div>
+  <div class="nav-right">
+    <div class="dot" id="dot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+</nav>
+
+<!-- OFFLINE BANNER -->
+<div style="padding:12px 18px 0;">
+  <div class="offline" id="offlineBanner">
+    Detector offline — run <strong>python anomalytracker.py</strong> in VS Code terminal.
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: DASHBOARD
+══════════════════════════════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+
+  <!-- Metric cards -->
+  <div class="g4">
+    <div class="card" id="cpuCard">
+      <div class="card-label">CPU Usage</div>
+      <div class="card-value" id="cpuVal">--<span class="card-unit">%</span></div>
+      <div class="card-sub" id="cpuSub">—</div>
+    </div>
+    <div class="card" id="memCard">
+      <div class="card-label">Memory</div>
+      <div class="card-value" id="memVal">--<span class="card-unit">%</span></div>
+      <div class="card-sub" id="memSub">—</div>
+    </div>
+    <div class="card" id="latCard">
+      <div class="card-label">Latency</div>
+      <div class="card-value" id="latVal">--<span class="card-unit">ms</span></div>
+      <div class="card-sub" id="latSub">—</div>
+    </div>
+    <div class="card" id="lossCard">
+      <div class="card-label">Packet Loss</div>
+      <div class="card-value" id="lossVal">--<span class="card-unit">%</span></div>
+      <div class="card-sub" id="lossSub">—</div>
+    </div>
+  </div>
+
+  <div class="g4">
+    <div class="card" id="netCard">
+      <div class="card-label">Network In</div>
+      <div class="card-value" id="netVal">--<span class="card-unit">MB/s</span></div>
+      <div class="card-sub" id="netSub">—</div>
+    </div>
+    <div class="card" id="diskCard">
+      <div class="card-label">Disk I/O</div>
+      <div class="card-value" id="diskVal">--<span class="card-unit">MB/s</span></div>
+      <div class="card-sub" id="diskSub">—</div>
+    </div>
+    <div class="card" id="scoreCard">
+      <div class="card-label">Anomaly Score</div>
+      <div class="card-value" id="scoreVal">--</div>
+      <div class="card-sub" id="scoreSub">—</div>
+    </div>
+    <div class="card" id="uptimeCard">
+      <div class="card-label">Uptime</div>
+      <div class="card-value" id="uptimeVal" style="font-size:16px;padding-top:4px;">--</div>
+      <div class="card-sub" id="uptimeSub" style="color:#2dff8c;">Running</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="g21">
+    <div class="panel">
+      <div class="panel-title">Real-time signals</div>
+      <div style="position:relative;height:190px;">
+        <canvas id="lineChart" role="img" aria-label="Real-time metric line chart"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Anomaly Z-score</div>
+      <div style="position:relative;height:190px;">
+        <canvas id="barChart" role="img" aria-label="Anomaly Z-score bar chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="panel">
+    <div class="panel-title">Live anomaly log</div>
+    <div id="logPanel"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: DEVICES
+══════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-devices">
+  <div class="panel">
+    <div class="panel-title">
+      Discovered devices
+      <span id="deviceCount" style="color:#5ca8f8;">Scanning...</span>
+    </div>
+    <table class="dev-table">
+      <thead>
+        <tr>
+          <th>IP Address</th>
+          <th>Hostname</th>
+          <th>MAC / Vendor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="deviceTable">
+        <tr><td colspan="4" style="color:#334455;text-align:center;padding:20px;">
+          Scanning network... (this takes up to 30 seconds on first run)
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: TRAFFIC
+══════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-traffic">
+  <div class="g2">
+    <div class="panel">
+      <div class="panel-title">Protocol breakdown</div>
+      <div id="trafficPanel"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Network in over time</div>
+      <div style="position:relative;height:220px;">
+        <canvas id="netChart" role="img" aria-label="Network traffic over time"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="g3">
+    <div class="card">
+      <div class="card-label">Total Inbound</div>
+      <div class="card-value" id="tNetVal">--<span class="card-unit">MB/s</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Latency (avg)</div>
+      <div class="card-value" id="tLatVal">--<span class="card-unit">ms</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Packet Loss</div>
+      <div class="card-value" id="tLossVal">--<span class="card-unit">%</span></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Latency over time</div>
+    <div style="position:relative;height:160px;">
+      <canvas id="latChart" role="img" aria-label="Latency over time"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: ALERTS & CONFIG
+══════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-alerts">
+  <div class="alert-config-grid">
+
+    <!-- Threshold config -->
+    <div class="config-section">
+      <div class="config-title">Alert Thresholds</div>
+
+      <div class="field">
+        <label>CPU Alert Threshold</label>
+        <div class="range-row">
+          <input type="range" min="50" max="100" value="85" id="cpuThresh" oninput="document.getElementById('cpuThreshVal').textContent=this.value+'%'">
+          <span class="range-val" id="cpuThreshVal">85%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Memory Alert Threshold</label>
+        <div class="range-row">
+          <input type="range" min="50" max="100" value="90" id="memThresh" oninput="document.getElementById('memThreshVal').textContent=this.value+'%'">
+          <span class="range-val" id="memThreshVal">90%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Latency Alert Threshold</label>
+        <div class="range-row">
+          <input type="range" min="10" max="1000" step="10" value="200" id="latThresh" oninput="document.getElementById('latThreshVal').textContent=this.value+'ms'">
+          <span class="range-val" id="latThreshVal">200ms</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Packet Loss Threshold</label>
+        <div class="range-row">
+          <input type="range" min="1" max="50" value="10" id="lossThresh" oninput="document.getElementById('lossThreshVal').textContent=this.value+'%'">
+          <span class="range-val" id="lossThreshVal">10%</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Anomaly Score Threshold (Z-score)</label>
+        <div class="range-row">
+          <input type="range" min="1" max="5" step="0.1" value="2.5" id="scoreThresh" oninput="document.getElementById('scoreThreshVal').textContent=parseFloat(this.value).toFixed(1)">
+          <span class="range-val" id="scoreThreshVal">2.5</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email config -->
+    <div class="config-section">
+      <div class="config-title">Email Notifications</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Enable email alerts</span>
+        <div class="toggle" id="emailToggle" onclick="toggle('emailToggle','emailEnabled')"></div>
+      </div>
+      <div class="field">
+        <label>From Email (Gmail)</label>
+        <input type="text" id="emailFrom" placeholder="yourname@gmail.com">
+      </div>
+      <div class="field">
+        <label>To Email</label>
+        <input type="text" id="emailTo" placeholder="alerts@yourmail.com">
+      </div>
+      <div class="field">
+        <label>Gmail App Password</label>
+        <input type="password" id="smtpPassword" placeholder="xxxx xxxx xxxx xxxx">
+      </div>
+      <div style="font-size:10px;color:#445566;margin-top:-6px;margin-bottom:10px;">
+        Use a Gmail App Password — not your main password. Generate at myaccount.google.com/apppasswords
+      </div>
+    </div>
+
+    <!-- SMS config -->
+    <div class="config-section">
+      <div class="config-title">SMS Notifications (Twilio)</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Enable SMS alerts</span>
+        <div class="toggle" id="smsToggle" onclick="toggle('smsToggle','smsEnabled')"></div>
+      </div>
+      <div class="field">
+        <label>Twilio Account SID</label>
+        <input type="text" id="twilioSid" placeholder="ACxxxxxxxxxxxxxxxx">
+      </div>
+      <div class="field">
+        <label>Twilio Auth Token</label>
+        <input type="password" id="twilioToken" placeholder="your auth token">
+      </div>
+      <div class="field">
+        <label>From Number (Twilio)</label>
+        <input type="text" id="twilioFrom" placeholder="+12025551234">
+      </div>
+      <div class="field">
+        <label>Your Mobile Number</label>
+        <input type="text" id="smsTo" placeholder="+447911123456">
+      </div>
+    </div>
+
+    <!-- Network config -->
+    <div class="config-section">
+      <div class="config-title">Network Settings</div>
+      <div class="field">
+        <label>Local Subnet (first 3 octets)</label>
+        <input type="text" id="subnet" placeholder="192.168.1">
+      </div>
+      <div class="field">
+        <label>Ping Targets (comma separated)</label>
+        <input type="text" id="pingTargets" placeholder="8.8.8.8, 1.1.1.1">
+      </div>
+      <div style="margin-top:16px;">
+        <div class="config-title" style="margin-bottom:10px;">Test Notifications</div>
+        <button class="btn" onclick="testNotify()">Send Test Alert</button>
+        <div class="save-msg" id="testMsg">Test notification sent!</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="save-row">
+    <button class="btn btn-success" onclick="saveConfig()">Save All Settings</button>
+    <button class="btn" onclick="loadConfig()">Reset to Saved</button>
+  </div>
+  <div class="save-msg" id="saveMsg">Settings saved and applied to detector.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: WEEKLY REPORT
+══════════════════════════════════════════════════════════════ -->
+<div class="page" id="page-report">
+  <div class="panel">
+    <div class="panel-title">Weekly Performance Summary</div>
+    <div id="reportContent">
+      <div style="color:#334455;text-align:center;padding:40px;font-size:13px;">
+        Report generates after 7 days of monitoring data.<br>
+        <span style="color:#445566;font-size:11px;">Check back next week or trigger manually below.</span>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:8px;">
+    <button class="btn" onclick="fetchReport()">Refresh Report</button>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:5000';
+let prev = {};
+let toggleState = { emailEnabled: false, smsEnabled: false };
+let configLoaded = false;
+
+// ── NAVIGATION ────────────────────────────────────────────────────────
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'alerts' && !configLoaded) loadConfig();
+  if (name === 'report') fetchReport();
+}
+
+// ── CHARTS ───────────────────────────────────────────────────────────
+const lineChart = new Chart(document.getElementById('lineChart').getContext('2d'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label:'CPU',    data:[], borderColor:'#5ca8f8', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { label:'Memory', data:[], borderColor:'#b07ef7', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { label:'Network',data:[], borderColor:'#2dff8c', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { label:'Disk',   data:[], borderColor:'#ffaa00', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{display:false},
+      y:{min:0,max:100, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#445566',font:{size:10},callback:v=>v+'%'}}
+    }
+  }
+});
+
+const barChart = new Chart(document.getElementById('barChart').getContext('2d'), {
+  type:'bar',
+  data:{
+    labels:['CPU','Mem','Net','Disk'],
+    datasets:[{data:[0,0,0,0], backgroundColor:['#5ca8f8','#b07ef7','#2dff8c','#ffaa00'], borderRadius:4}]
+  },
+  options:{
+    responsive:true, maintainAspectRatio:false, animation:{duration:400},
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{display:false}, ticks:{color:'#445566',font:{size:10}}},
+      y:{min:0,max:5, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#445566',font:{size:10}}}
+    }
+  }
+});
+
+const netChart = new Chart(document.getElementById('netChart').getContext('2d'), {
+  type:'line',
+  data:{labels:[],datasets:[{label:'Network MB/s',data:[],borderColor:'#2dff8c',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(45,255,140,0.05)'}]},
+  options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#445566',font:{size:10}}}}}
+});
+
+const latChart = new Chart(document.getElementById('latChart').getContext('2d'), {
+  type:'line',
+  data:{labels:[],datasets:[{label:'Latency ms',data:[],borderColor:'#ffaa00',borderWidth:1.5,pointRadius:0,tension:0.4,fill:true,backgroundColor:'rgba(255,170,0,0.05)'}]},
+  options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{display:false},y:{min:0,grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#445566',font:{size:10},callback:v=>v+'ms'}}}}
+});
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function setCard(cardId, valId, subId, value, unit, prevVal, isAnomaly, isWarn) {
+  const card = document.getElementById(cardId);
+  document.getElementById(valId).innerHTML = value + `<span class="card-unit">${unit}</span>`;
+  card.classList.toggle('anomaly', isAnomaly);
+  card.classList.toggle('warn', isWarn && !isAnomaly);
+  const sub = document.getElementById(subId);
+  if (isAnomaly) {
+    sub.innerHTML = '<span class="badge-a">ANOMALY</span>';
+  } else if (prevVal !== null) {
+    const diff = (parseFloat(value) - parseFloat(prevVal)).toFixed(1);
+    const cls = Math.abs(diff) > 5 ? (isWarn ? 'warn-c' : 'up') : 'ok';
+    sub.innerHTML = `<span class="${cls}">${diff>=0?'+':''}${diff}${unit} vs last</span>`;
+  }
+}
+
+function formatUptime(secs) {
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${secs%60}s`;
+}
+
+function updateLog(logs) {
+  document.getElementById('logPanel').innerHTML = (logs||[]).map(l => {
+    const cls = l.type==='ANOMALY'?'tag-a': l.type==='WARN'?'tag-w':'tag-ok';
+    return `<div class="log-row">
+      <span class="log-time">${l.time}</span>
+      <span class="log-msg">${l.msg}</span>
+      <span class="log-tag ${cls}">${l.type}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateTraffic(t, net) {
+  const items = [
+    {label:'HTTP',  val:t.http,  pct:Math.min(100,t.http/Math.max(net,0.01)*100), color:'#5ca8f8'},
+    {label:'DNS',   val:t.dns,   pct:Math.min(100,t.dns/Math.max(net,0.01)*100),  color:'#2dff8c'},
+    {label:'SSH',   val:t.ssh,   pct:Math.min(100,t.ssh/Math.max(net,0.01)*100),  color:'#b07ef7'},
+    {label:'Other', val:t.other, pct:Math.min(100,t.other/Math.max(net,0.01)*100),color:'#ffaa00'},
+  ];
+  document.getElementById('trafficPanel').innerHTML = items.map(it=>`
+    <div class="t-item">
+      <div class="t-label">${it.label}</div>
+      <div class="t-track"><div class="t-fill" style="width:${it.pct.toFixed(0)}%;background:${it.color}"></div></div>
+      <div class="t-val">${it.val.toFixed(2)} MB/s</div>
+    </div>`).join('');
+}
+
+function updateDevices(devices) {
+  if (!devices || devices.length === 0) {
+    document.getElementById('deviceTable').innerHTML = '<tr><td colspan="4" style="color:#334455;text-align:center;padding:20px;">No devices found yet — scanning in background...</td></tr>';
+    document.getElementById('deviceCount').textContent = '0 devices';
+    return;
+  }
+  document.getElementById('deviceCount').textContent = `${devices.length} device${devices.length!==1?'s':''} found`;
+  document.getElementById('deviceTable').innerHTML = devices.map(d=>`
+    <tr>
+      <td>${d.ip}</td>
+      <td>${d.hostname||'Unknown'}</td>
+      <td>${d.mac||'—'} ${d.vendor?'('+d.vendor+')':''}</td>
+      <td><span class="${d.status==='up'?'status-up':'status-dn'}">${d.status==='up'?'Online':'Offline'}</span></td>
+    </tr>`).join('');
+}
+
+function updateCharts(history) {
+  if (!history || history.length === 0) return;
+  const labels = history.map(h=>h.t);
+  lineChart.data.labels = labels;
+  lineChart.data.datasets[0].data = history.map(h=>h.cpu);
+  lineChart.data.datasets[1].data = history.map(h=>h.mem);
+  lineChart.data.datasets[2].data = history.map(h=>Math.min(h.net*15,100));
+  lineChart.data.datasets[3].data = history.map(h=>Math.min(h.disk*15,100));
+  lineChart.update('none');
+  netChart.data.labels = labels;
+  netChart.data.datasets[0].data = history.map(h=>h.net);
+  netChart.update('none');
+  latChart.data.labels = labels;
+  latChart.data.datasets[0].data = history.map(h=>h.latency||0);
+  latChart.update('none');
+}
+
+// ── MAIN FETCH ────────────────────────────────────────────────────────
+async function fetchAndUpdate() {
+  try {
+    const res = await fetch(API+'/metrics', {signal: AbortSignal.timeout(3000)});
+    const d = await res.json();
+
+    document.getElementById('dot').className = 'dot';
+    document.getElementById('statusText').textContent = 'Live — updating every 5s';
+    document.getElementById('offlineBanner').classList.remove('show');
+
+    setCard('cpuCard',  'cpuVal',  'cpuSub',  d.cpu,  '%',     prev.cpu,  d.a_cpu,  false);
+    setCard('memCard',  'memVal',  'memSub',  d.mem,  '%',     prev.mem,  d.a_mem,  false);
+    setCard('latCard',  'latVal',  'latSub',  d.latency, 'ms', prev.lat,  false, d.a_latency);
+    setCard('lossCard', 'lossVal', 'lossSub', d.packet_loss, '%', prev.loss, false, d.a_packet_loss);
+    setCard('netCard',  'netVal',  'netSub',  d.net,  ' MB/s', prev.net,  d.a_net,  false);
+    setCard('diskCard', 'diskVal', 'diskSub', d.disk, ' MB/s', prev.disk, d.a_disk, false);
+
+    const scoreEl = document.getElementById('scoreVal');
+    const scoreCard = document.getElementById('scoreCard');
+    scoreEl.innerHTML = d.score + '<span class="card-unit"> z</span>';
+    scoreCard.classList.toggle('anomaly', d.score > 2.5);
+    document.getElementById('scoreSub').innerHTML = d.trained
+      ? `<span class="ok">Model trained</span>`
+      : `<span class="warn-c">Collecting baseline...</span>`;
+
+    document.getElementById('uptimeVal').textContent = formatUptime(d.uptime_seconds||0);
+
+    barChart.data.datasets[0].data = [d.z_cpu||0, d.z_mem||0, d.z_net||0, d.z_disk||0];
+    barChart.data.datasets[0].backgroundColor = [
+      d.a_cpu?'#ff3355':'#5ca8f8', d.a_mem?'#ff3355':'#b07ef7',
+      d.a_net?'#ff3355':'#2dff8c', d.a_disk?'#ff3355':'#ffaa00'
+    ];
+    barChart.update();
+
+    updateCharts(d.history);
+    updateLog(d.log);
+    if (d.traffic) updateTraffic(d.traffic, d.net);
+    if (d.devices) updateDevices(d.devices);
+
+    // Traffic page metrics
+    document.getElementById('tNetVal').innerHTML  = d.net + '<span class="card-unit"> MB/s</span>';
+    document.getElementById('tLatVal').innerHTML  = d.latency + '<span class="card-unit"> ms</span>';
+    document.getElementById('tLossVal').innerHTML = d.packet_loss + '<span class="card-unit">%</span>';
+
+    prev = {cpu:d.cpu, mem:d.mem, lat:d.latency, loss:d.packet_loss, net:d.net, disk:d.disk};
+
+  } catch(e) {
+    document.getElementById('dot').className = 'dot off';
+    document.getElementById('statusText').textContent = 'Offline';
+    document.getElementById('offlineBanner').classList.add('show');
+  }
+}
+
+// ── ALERTS CONFIG ─────────────────────────────────────────────────────
+function toggle(elId, key) {
+  toggleState[key] = !toggleState[key];
+  document.getElementById(elId).classList.toggle('on', toggleState[key]);
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch(API+'/config');
+    const cfg = await res.json();
+
+    const a = cfg.alerts, n = cfg.notifications, net = cfg.network;
+    document.getElementById('cpuThresh').value     = a.cpu_threshold;
+    document.getElementById('cpuThreshVal').textContent = a.cpu_threshold + '%';
+    document.getElementById('memThresh').value     = a.mem_threshold;
+    document.getElementById('memThreshVal').textContent = a.mem_threshold + '%';
+    document.getElementById('latThresh').value     = a.latency_threshold;
+    document.getElementById('latThreshVal').textContent = a.latency_threshold + 'ms';
+    document.getElementById('lossThresh').value    = a.packet_loss_threshold;
+    document.getElementById('lossThreshVal').textContent = a.packet_loss_threshold + '%';
+    document.getElementById('scoreThresh').value   = a.anomaly_score_threshold;
+    document.getElementById('scoreThreshVal').textContent = parseFloat(a.anomaly_score_threshold).toFixed(1);
+
+    document.getElementById('emailFrom').value     = n.email_from||'';
+    document.getElementById('emailTo').value       = n.email_to||'';
+    document.getElementById('smtpPassword').value  = n.smtp_password||'';
+    document.getElementById('twilioSid').value     = n.twilio_sid||'';
+    document.getElementById('twilioToken').value   = n.twilio_token||'';
+    document.getElementById('twilioFrom').value    = n.twilio_from||'';
+    document.getElementById('smsTo').value         = n.sms_to||'';
+    document.getElementById('subnet').value        = net.subnet||'192.168.1';
+    document.getElementById('pingTargets').value   = (net.ping_targets||[]).join(', ');
+
+    toggleState.emailEnabled = n.email_enabled||false;
+    toggleState.smsEnabled   = n.sms_enabled||false;
+    document.getElementById('emailToggle').classList.toggle('on', toggleState.emailEnabled);
+    document.getElementById('smsToggle').classList.toggle('on',   toggleState.smsEnabled);
+
+    configLoaded = true;
+  } catch(e) {
+    console.log('Config load failed — detector may be offline');
+  }
+}
+
+async function saveConfig() {
+  const cfg = {
+    alerts: {
+      cpu_threshold:           parseInt(document.getElementById('cpuThresh').value),
+      mem_threshold:           parseInt(document.getElementById('memThresh').value),
+      latency_threshold:       parseInt(document.getElementById('latThresh').value),
+      packet_loss_threshold:   parseInt(document.getElementById('lossThresh').value),
+      anomaly_score_threshold: parseFloat(document.getElementById('scoreThresh').value),
+    },
+    notifications: {
+      email_enabled:  toggleState.emailEnabled,
+      email_from:     document.getElementById('emailFrom').value,
+      email_to:       document.getElementById('emailTo').value,
+      smtp_password:  document.getElementById('smtpPassword').value,
+      smtp_host:      'smtp.gmail.com',
+      smtp_port:      587,
+      sms_enabled:    toggleState.smsEnabled,
+      twilio_sid:     document.getElementById('twilioSid').value,
+      twilio_token:   document.getElementById('twilioToken').value,
+      twilio_from:    document.getElementById('twilioFrom').value,
+      sms_to:         document.getElementById('smsTo').value,
+    },
+    network: {
+      subnet:       document.getElementById('subnet').value,
+      ping_targets: document.getElementById('pingTargets').value.split(',').map(s=>s.trim()).filter(Boolean),
+    }
+  };
+  try {
+    await fetch(API+'/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg) });
+    const msg = document.getElementById('saveMsg');
+    msg.classList.add('show');
+    setTimeout(()=>msg.classList.remove('show'), 3000);
+  } catch(e) {
+    alert('Save failed — is the detector running?');
+  }
+}
+
+async function testNotify() {
+  try {
+    await fetch(API+'/test-notify', {method:'POST'});
+    const msg = document.getElementById('testMsg');
+    msg.classList.add('show');
+    setTimeout(()=>msg.classList.remove('show'), 3000);
+  } catch(e) { alert('Test failed — is the detector running?'); }
+}
+
+// ── WEEKLY REPORT ─────────────────────────────────────────────────────
+async function fetchReport() {
+  try {
+    const res = await fetch(API+'/report');
+    const r = await res.json();
+    if (!r || !r.summary) {
+      document.getElementById('reportContent').innerHTML = `
+        <div style="color:#334455;text-align:center;padding:40px;font-size:13px;">
+          No report available yet — needs 7 days of data.<br>
+          <span style="font-size:11px;color:#445566;">The report will auto-generate and email you weekly.</span>
+        </div>`;
+      return;
+    }
+    const s = r.summary;
+    document.getElementById('reportContent').innerHTML = `
+      <div style="color:#5ca8f8;font-size:11px;margin-bottom:16px;">Generated: ${r.generated} &nbsp;|&nbsp; Period: ${r.period}</div>
+      <div class="g4" style="margin-bottom:0;">
+        <div class="report-stat"><div class="report-stat-val">${s.avg_cpu}%</div><div class="report-stat-label">Avg CPU</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.max_cpu}%</div><div class="report-stat-label">Peak CPU</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.avg_mem}%</div><div class="report-stat-label">Avg Memory</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.max_mem}%</div><div class="report-stat-label">Peak Memory</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.avg_net}</div><div class="report-stat-label">Avg Net MB/s</div></div>
+        <div class="report-stat"><div class="report-stat-val" style="color:${s.anomaly_count>10?'#ff3355':'#2dff8c'}">${s.anomaly_count}</div><div class="report-stat-label">Anomalies</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.avg_score}</div><div class="report-stat-label">Avg Score</div></div>
+        <div class="report-stat"><div class="report-stat-val">${s.max_score}</div><div class="report-stat-label">Peak Score</div></div>
+      </div>`;
+  } catch(e) {}
+}
+
+// ── START ─────────────────────────────────────────────────────────────
+fetchAndUpdate();
+setInterval(fetchAndUpdate, 5000);
+</script>
+</body>
+</html>
